@@ -33,6 +33,9 @@ func _enter_tree() -> void:
 		_debugger_plugin = MCPDebuggerPluginScript.new()
 		add_debugger_plugin(_debugger_plugin)
 
+	# Ensure the MCP daemon is running before we try to connect
+	_ensure_daemon_running()
+
 	# Create MCP client (WebSocket connection to server)
 	_mcp_client = MCPClientScript.new()
 	_mcp_client.name = "MCPClient"
@@ -75,6 +78,78 @@ func _check_runtime_debug_support() -> bool:
 		push_warning("[Godot MCP] Runtime debugging requires Godot 4.2+")
 		return false
 	return true
+
+
+## Auto-start the MCP daemon if running from the dev repo.
+##
+## Path resolution: the addon directory is typically symlinked from game projects
+## into the godot-mcp repo. ProjectSettings.globalize_path("res://...") returns
+## the project-side path without following symlinks, so we resolve via realpath
+## to find the actual repo location and derive the server path from there.
+func _ensure_daemon_running() -> void:
+	var addon_path := ProjectSettings.globalize_path("res://addons/godot_mcp")
+	var real_addon_dir := _resolve_symlink(addon_path)
+	var server_dir := real_addon_dir.path_join("../../server").simplify_path()
+	var index_path := server_dir.path_join("dist/index.js")
+
+	if not FileAccess.file_exists(index_path):
+		print("[Godot MCP] No local daemon found — start the MCP server manually or via npx")
+		return
+
+	if _is_port_in_use(6505):
+		print("[Godot MCP] Daemon already running (port 6505 in use)")
+		return
+
+	print("[Godot MCP] Starting MCP daemon from %s" % server_dir)
+	var pid: int
+	if OS.get_name() == "Windows":
+		pid = OS.create_process("cmd.exe", [
+			"/c", "cd /d \"%s\" && node dist/index.js --http --no-force" % server_dir
+		])
+	else:
+		var shell := OS.get_environment("SHELL")
+		if shell == "":
+			shell = "/bin/sh"
+		pid = OS.create_process(shell, [
+			"-l", "-c",
+			"cd '%s' && node dist/index.js --http --no-force" % server_dir
+		])
+	if pid > 0:
+		print("[Godot MCP] Daemon started (PID %d)" % pid)
+	else:
+		push_warning("[Godot MCP] Failed to start daemon")
+
+
+func _resolve_symlink(path: String) -> String:
+	var output: Array = []
+	if OS.get_name() == "Windows":
+		var exit_code := OS.execute("powershell", [
+			"-NoProfile", "-Command",
+			"(Get-Item '%s').Target ?? '%s'" % [path, path]
+		], output, true, false)
+		if exit_code == 0 and output.size() > 0:
+			var resolved := (output[0] as String).strip_edges()
+			if resolved != "":
+				return resolved
+	else:
+		var exit_code := OS.execute("realpath", [path], output, true, false)
+		if exit_code == 0 and output.size() > 0:
+			var resolved := (output[0] as String).strip_edges()
+			if resolved != "":
+				return resolved
+	return path
+
+
+func _is_port_in_use(port: int) -> bool:
+	var output: Array = []
+	if OS.get_name() == "Windows":
+		var exit_code := OS.execute("cmd.exe", [
+			"/c", "netstat -ano | findstr :%d | findstr LISTENING" % port
+		], output, true, false)
+		return exit_code == 0 and output.size() > 0 and output[0].strip_edges() != ""
+	else:
+		var exit_code := OS.execute("lsof", ["-ti", ":%d" % port], output, true, false)
+		return exit_code == 0 and output.size() > 0 and output[0].strip_edges() != ""
 
 
 func _cleanup_stale_autoload() -> void:
