@@ -1,0 +1,19 @@
+# Node
+node_modules/
+server/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Godot
+.godot/
+*.import
+
+# IDE
+.vscode/
+.idea/
+
+# Env
+.env
+.env.local
