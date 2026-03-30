@@ -1,70 +1,63 @@
 # Godot MCP — Claude Code Guidelines
 
-## Project Overview
+## What This Is
 
-MCP server + Godot plugin that gives AI assistants (Claude, Cursor, etc.) full access to the Godot 4.x editor via WebSocket. 51 tools across 8 categories + 9 read-only resources.
+MCP server + Godot 4.x plugin: 51 tools, 9 resources, WebSocket bridge. See [README.md](README.md) for full docs.
 
-## Repository Structure
+## Quick Reference
 
-- **Owner**: `drunikbe/godot-mcp` (Andrei Lavrenov / elfensky, Drunik BV)
-- **npm package**: `@drunik/godot-mcp`
-- Consolidates ideas from tomyud1, ee0pdt, and codingsolo godot-mcp implementations
+- **Owner**: `drunikbe/godot-mcp` (Drunik BV)
+- **npm**: `@drunik/godot-mcp`
+- **Build**: `cd server && npm install && npm run build`
+- **Test server**: `cd server && npm test` (16 tests)
+- **Test plugin**: `godot --headless --script res://tests/test_plugin.gd` (43 tests)
+- **Run**: `node dist/index.js` (stdio) or `node dist/index.js --http` (daemon)
 
 ## Key Paths
 
-- `server/src/` — MCP server (TypeScript/Node.js)
-  - `index.ts` — entry point, CLI args, transport wiring (stdio/HTTP)
-  - `server.ts` — `createMcpServer()` factory, tool registration, post-processors
-  - `bridge/godot-bridge.ts` — WebSocket bridge to Godot on port 6505
-  - `bridge/types.ts` — WebSocket protocol + tool definition types
-  - `tools/` — tool definitions with JSON schemas (per domain)
-  - `resources/` — MCP Resources (read-only data: project, scenes, scripts, editor state)
-- `addons/godot_mcp/` — Godot editor plugin (GDScript)
-  - `plugin.gd` — plugin entry, runtime debugging lifecycle
-  - `mcp_client.gd` — WebSocket client (connects to MCP server)
-  - `mcp_debugger_plugin.gd` — EditorDebuggerPlugin for runtime inspection
-  - `mcp_runtime.gd` — game-side autoload for runtime commands
-  - `commands/` — modular command processors (Chain of Responsibility pattern)
-    - `base_command_processor.gd` — abstract base class
-    - `command_handler.gd` — router (iterates processors)
-    - `file_commands.gd`, `scene_commands.gd`, `script_commands.gd`, etc.
+- `server/src/index.ts` — entry point, CLI flags, transport modes
+- `server/src/server.ts` — tool/resource registration, screenshot post-processing
+- `server/src/bridge/` — WebSocket bridge + protocol types
+- `server/src/tools/` — tool definitions (file, scene, script, project, asset, runtime, visualizer)
+- `server/src/resources/` — resource definitions and URI routing
+- `addons/godot_mcp/plugin.gd` — plugin lifecycle, auto-daemon, runtime autoload injection
+- `addons/godot_mcp/mcp_client.gd` — WebSocket client with auto-reconnect
+- `addons/godot_mcp/mcp_debugger_plugin.gd` — editor-to-game debugger bridge
+- `addons/godot_mcp/mcp_runtime.gd` — game-side handlers (screenshots, overlays, perf stats)
+- `addons/godot_mcp/commands/` — Chain of Responsibility command processors
 
 ## Architecture
 
-Two transport modes:
-- **stdio** (default): one MCP server per AI client
-- **HTTP daemon** (`--http`): persistent process, multiple AI clients share one Godot bridge
+```
+AI Client ──(MCP)──> server.ts ──(WebSocket :6505)──> Godot plugin ──> command processors
+                         │                                                     │
+                    Resources (:6506 HTTP)                          DebuggerPlugin ──> running game
+```
 
-Tool execution flow:
-AI Client → MCP → `server.ts` → `godotBridge.invokeTool()` → WebSocket → Godot plugin → `command_handler.execute_command()` → specific command processor → result back
+- **stdio**: one server per AI client session
+- **HTTP daemon** (`--http`): persistent, multiple clients share one Godot connection
+- **Runtime tools** (`game_*`, visualizer): auto-inject `__MCPRuntimeBridge__` autoload before play
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GODOT_MCP_PORT` | 6505 | WebSocket port for Godot connection |
-| `GODOT_MCP_HTTP_PORT` | 6506 | HTTP port for MCP clients (daemon mode) |
-| `GODOT_MCP_TIMEOUT_MS` | 30000 | Tool call timeout in ms |
-| `GODOT_MCP_IDLE_TIMEOUT_MS` | 30000 | Idle shutdown grace period |
+| `GODOT_MCP_PORT` | 6505 | WebSocket port |
+| `GODOT_MCP_HTTP_PORT` | 6506 | HTTP daemon port |
+| `GODOT_MCP_TIMEOUT_MS` | 30000 | Tool call timeout |
+| `GODOT_MCP_IDLE_TIMEOUT_MS` | 30000 | Daemon idle shutdown |
 
-## Build & Run
+## Adding Tools
 
-```sh
-cd server && npm install && npm run build
-node dist/index.js          # stdio mode
-node dist/index.js --http   # daemon mode
-```
+1. Define schema in `server/src/tools/<domain>-tools.ts`
+2. Register in `server/src/tools/index.ts`
+3. Implement handler in `addons/godot_mcp/commands/<domain>_commands.gd`
+4. Register processor in `commands/command_handler.gd`
+5. Rebuild: `cd server && npm run build`
 
-## Adding New Tools
+## Conventions
 
-1. Create tool definitions in `server/src/tools/<domain>-tools.ts`
-2. Add to `server/src/tools/index.ts`
-3. Create `addons/godot_mcp/commands/<domain>_commands.gd` extending `MCPBaseCommandProcessor`
-4. Register in `commands/command_handler.gd` `_initialize_processors()`
-
-## Tool Conventions
-
-- **Descriptions**: 1-2 sentences, action-oriented. Use CAPS for critical constraints.
-- **Input validation**: Always validate before executing. Return `{&"ok": false, &"error": "..."}` on failure.
-- **Result format**: All GDScript handlers return Dictionary with `&"ok": bool`.
-- **Virtual methods**: Keep well-known virtuals (`_ready`, `_process`, etc.) — don't filter `_`-prefixed methods.
+- **Tool results**: `{&"ok": bool}` + data or `{&"error": "msg"}`
+- **Descriptions**: action-oriented, CAPS for constraints
+- **Godot 4.6 compat**: don't use `:=` with dynamically-typed rhs (e.g. `Engine.get_meta()` chains) — use explicit types or `=`
+- **Screenshots**: tools returning `path` field get post-processed to base64 `ImageContent` by server.ts
