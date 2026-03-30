@@ -242,11 +242,13 @@ async function shutdown() {
   isShuttingDown = true;
   console.error(`[godot-mcp] Shutting down...`);
 
-  for (const sessionId of Object.keys(httpSessions)) {
+  // Snapshot sessions before closing (transport.close triggers onclose which deletes from map)
+  const sessions = Object.entries(httpSessions);
+  for (const [sessionId, session] of sessions) {
     try {
-      await httpSessions[sessionId].transport.close();
-      await httpSessions[sessionId].server.close();
       delete httpSessions[sessionId];
+      await session.transport.close();
+      await session.server.close();
     } catch (error) {
       console.error(`[godot-mcp] Error closing session ${sessionId}:`, error);
     }

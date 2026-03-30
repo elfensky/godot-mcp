@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-MCP server + Godot plugin that gives AI assistants (Claude, Cursor, etc.) full access to the Godot 4.x editor via WebSocket. 46 tools across 7 categories.
+MCP server + Godot plugin that gives AI assistants (Claude, Cursor, etc.) full access to the Godot 4.x editor via WebSocket. 51 tools across 8 categories + 9 read-only resources.
 
 ## Repository Structure
 
@@ -18,7 +18,7 @@ MCP server + Godot plugin that gives AI assistants (Claude, Cursor, etc.) full a
   - `bridge/godot-bridge.ts` — WebSocket bridge to Godot on port 6505
   - `bridge/types.ts` — WebSocket protocol + tool definition types
   - `tools/` — tool definitions with JSON schemas (per domain)
-  - `resources/` — MCP Resources (read-only data, WIP)
+  - `resources/` — MCP Resources (read-only data: project, scenes, scripts, editor state)
 - `addons/godot_mcp/` — Godot editor plugin (GDScript)
   - `plugin.gd` — plugin entry, runtime debugging lifecycle
   - `mcp_client.gd` — WebSocket client (connects to MCP server)

@@ -10,6 +10,9 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ListResourceTemplatesRequestSchema,
+  ReadResourceRequestSchema,
   ErrorCode,
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
@@ -17,6 +20,7 @@ import { readFileSync, existsSync } from 'node:fs';
 
 import { GodotBridge } from './bridge/godot-bridge.js';
 import { allTools, toolExists } from './tools/index.js';
+import { staticResources, resourceTemplates, readResource } from './resources/index.js';
 
 const SERVER_NAME = '@drunik/godot-mcp';
 
@@ -26,7 +30,7 @@ export function createMcpServer(
 ): Server {
   const server = new Server(
     { name: SERVER_NAME, version },
-    { capabilities: { tools: {} } }
+    { capabilities: { tools: {}, resources: {} } }
   );
 
   // ── List tools ───────────────────────────────────────────────────
@@ -110,8 +114,9 @@ export function createMcpServer(
     try {
       const result = await godotBridge.invokeTool(name, toolArgs);
 
-      // Post-process game_screenshot: read PNG from disk, return as base64 ImageContent
-      if (name === 'game_screenshot' && result && typeof result === 'object' && 'path' in (result as Record<string, unknown>)) {
+      // Post-process tools that return screenshots: read PNG from disk, return as base64 ImageContent
+      const screenshotTools = ['game_screenshot', 'debug_draw_overlay', 'highlight_node'];
+      if (screenshotTools.includes(name) && result && typeof result === 'object' && 'path' in (result as Record<string, unknown>)) {
         const screenshotResult = result as Record<string, unknown>;
         const filePath = screenshotResult.path as string;
 
@@ -131,11 +136,12 @@ export function createMcpServer(
                 { type: 'image' as const, data: base64, mimeType: 'image/png' },
                 {
                   type: 'text' as const,
-                  text: JSON.stringify({
-                    ok: true,
-                    width: screenshotResult.width,
-                    height: screenshotResult.height
-                  }, null, 2)
+                  text: JSON.stringify(
+                    Object.fromEntries(
+                      Object.entries(screenshotResult).filter(([k]) => k !== 'path')
+                    ),
+                    null, 2
+                  )
                 }
               ]
             };
@@ -174,6 +180,55 @@ export function createMcpServer(
         }],
         isError: true
       };
+    }
+  });
+
+  // ── List resources ────────────────────────────────────────────────
+
+  server.setRequestHandler(ListResourcesRequestSchema, async () => {
+    return {
+      resources: staticResources.map(r => ({
+        uri: r.uri,
+        name: r.name,
+        description: r.description,
+        mimeType: r.mimeType
+      }))
+    };
+  });
+
+  // ── List resource templates ───────────────────────────────────────
+
+  server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => {
+    return {
+      resourceTemplates: resourceTemplates.map(r => ({
+        uriTemplate: r.uriTemplate,
+        name: r.name,
+        description: r.description,
+        mimeType: r.mimeType
+      }))
+    };
+  });
+
+  // ── Read resource ─────────────────────────────────────────────────
+
+  server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    const { uri } = request.params;
+
+    try {
+      const { content, mimeType } = await readResource(uri, godotBridge);
+      return {
+        contents: [{
+          uri,
+          mimeType,
+          text: content
+        }]
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new McpError(
+        ErrorCode.InvalidRequest,
+        `Failed to read resource ${uri}: ${errorMessage}`
+      );
     }
   });
 

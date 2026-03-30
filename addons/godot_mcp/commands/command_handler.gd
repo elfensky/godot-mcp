@@ -23,6 +23,7 @@ func _initialize_processors() -> void:
 	_register_processor(MCPProjectCommands.new(), "ProjectCommands")
 	_register_processor(MCPAssetCommands.new(), "AssetCommands")
 	_register_processor(MCPRuntimeCommands.new(), "RuntimeCommands")
+	_register_processor(MCPVisualizerCommands.new(), "VisualizerCommands")
 
 
 func _register_processor(processor: MCPBaseCommandProcessor, node_name: String) -> void:

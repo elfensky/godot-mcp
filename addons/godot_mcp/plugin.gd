@@ -70,6 +70,9 @@ func _setup_runtime_commands() -> void:
 		if runtime_cmd:
 			runtime_cmd.set_debugger_plugin(_debugger_plugin)
 			runtime_cmd.set_screenshot_path(_screenshot_path)
+		var visualizer_cmd = _command_handler.get_processor("VisualizerCommands")
+		if visualizer_cmd:
+			visualizer_cmd.set_debugger_plugin(_debugger_plugin)
 
 
 func _check_runtime_debug_support() -> bool:
@@ -189,7 +192,7 @@ func _cleanup_screenshot_dir(dir_path: String) -> void:
 	dir.list_dir_begin()
 	var file_name := dir.get_next()
 	while file_name != "":
-		if not dir.current_is_dir() and file_name.begins_with("screenshot_") and file_name.ends_with(".png"):
+		if not dir.current_is_dir() and (file_name.begins_with("screenshot_") or file_name.begins_with("overlay_")) and file_name.ends_with(".png"):
 			DirAccess.remove_absolute(dir_path.path_join(file_name))
 		file_name = dir.get_next()
 	dir.list_dir_end()
@@ -244,11 +247,23 @@ func _on_disconnected() -> void:
 		_debugger_plugin.cancel_all_pending()
 
 
+const _RUNTIME_TOOLS := [
+	"game_", "debug_draw_overlay", "clear_debug_overlay",
+	"highlight_node", "watch_property", "performance_stats",
+]
+
+
+func _is_runtime_tool(tool_name: String) -> bool:
+	if tool_name.begins_with("game_"):
+		return true
+	return tool_name in _RUNTIME_TOOLS
+
+
 func _on_tool_requested(request_id: String, tool_name: String, args: Dictionary) -> void:
 	print("[Godot MCP] Executing tool: ", tool_name)
 
-	# Auto-enable runtime debugging on first game_* call
-	if tool_name.begins_with("game_") and not _runtime_debugging_enabled:
+	# Auto-enable runtime debugging on first runtime/visualizer tool call
+	if _is_runtime_tool(tool_name) and not _runtime_debugging_enabled:
 		_runtime_debugging_enabled = true
 		print("[Godot MCP] Runtime debugging auto-enabled")
 
@@ -263,8 +278,8 @@ func _on_tool_requested(request_id: String, tool_name: String, args: Dictionary)
 		_send_result(request_id, result)
 		return
 
-	# Auto-restart for game_* tools if autoload not injected but scene is running
-	if tool_name.begins_with("game_") and not _autoload_injected:
+	# Auto-restart for runtime tools if autoload not injected but scene is running
+	if _is_runtime_tool(tool_name) and not _autoload_injected:
 		if EditorInterface.is_playing_scene():
 			EditorInterface.stop_playing_scene()
 			_inject_runtime_autoload()
