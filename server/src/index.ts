@@ -29,10 +29,13 @@ import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'child_process';
+import { readFileSync } from 'node:fs';
 import { GodotBridge } from './bridge/godot-bridge.js';
 import { createMcpServer } from './server.js';
 
-const VERSION = '0.1.0';
+const VERSION = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf-8')
+).version;
 const WEBSOCKET_PORT = parseInt(process.env.GODOT_MCP_PORT || '6505', 10);
 const MCP_HTTP_PORT = parseInt(process.env.GODOT_MCP_HTTP_PORT || '6506', 10);
 const TOOL_TIMEOUT = parseInt(process.env.GODOT_MCP_TIMEOUT_MS || '30000', 10);

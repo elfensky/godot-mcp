@@ -274,6 +274,21 @@ godot --headless --script res://tests/test_plugin.gd
 - **Results**: All handlers return Dictionary with `&"ok": bool`.
 - **Naming**: snake_case, prefixed by domain (`game_`, `debug_`).
 
+## Contributing
+
+This project uses [GitHub Flow](https://docs.github.com/en/get-started/using-git/github-flow):
+
+1. Create a feature branch from `main`: `git checkout -b feature/my-change`
+2. Make changes, commit with clear messages
+3. Open a pull request against `main`
+4. After review and CI pass, merge to `main`
+5. Tag releases with semantic versions: `git tag v0.2.0`
+
+Versioning follows [Semantic Versioning](https://semver.org/). The version lives in three places — keep them in sync:
+- `server/package.json` (source of truth, read at runtime)
+- `addons/godot_mcp/plugin.cfg`
+- `CHANGELOG.md`
+
 ## Compatibility
 
 - **Godot**: 4.2+ (runtime debugging requires 4.2+, tested on 4.6)
