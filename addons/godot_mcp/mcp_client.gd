@@ -8,6 +8,7 @@ signal connected
 signal disconnected
 signal tool_requested(request_id: String, tool_name: String, args: Dictionary)
 
+const DEFAULT_PORT := 6505
 const DEFAULT_URL := "ws://127.0.0.1:6505"
 const RECONNECT_DELAY := 2.0
 const MAX_RECONNECT_DELAY := 10.0
@@ -61,8 +62,13 @@ func _process(_delta: float) -> void:
 				_handle_disconnect()
 
 
-func connect_to_server(url: String = DEFAULT_URL) -> void:
-	server_url = url
+func set_port(port: int) -> void:
+	server_url = "ws://127.0.0.1:%d" % port
+
+
+func connect_to_server(url: String = "") -> void:
+	if url != "":
+		server_url = url
 	_should_reconnect = true
 	_current_reconnect_delay = RECONNECT_DELAY
 	_attempt_connection()

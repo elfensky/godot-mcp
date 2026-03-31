@@ -84,7 +84,7 @@ async function initSession() {
 
 describe('MCP Server', () => {
   before(async () => {
-    serverProcess = spawn('node', ['dist/index.js', '--http', '--no-force'], {
+    serverProcess = spawn('node', ['dist/index.js', '--daemon', '--no-force'], {
       cwd: new URL('../', import.meta.url).pathname,
       env: {
         ...process.env,

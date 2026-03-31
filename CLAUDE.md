@@ -9,13 +9,16 @@ MCP server + Godot 4.x plugin: 61 tools, 9 resources, WebSocket bridge. See [REA
 - **Owner**: `drunikbe/godot-mcp` (Drunik BV)
 - **npm**: `@drunik/godot-mcp`
 - **Build**: `cd server && npm install && npm run build`
-- **Test server**: `cd server && npm test` (16 tests)
+- **Test server**: `cd server && npm test` (67 tests)
 - **Test plugin**: `godot --headless --script res://tests/test_plugin.gd` (43 tests)
-- **Run**: `node dist/index.js` (stdio) or `node dist/index.js --http` (daemon)
+- **Run**: `node dist/index.js --daemon` (HTTP server) or `node dist/index.js --project <path>` (shim → auto-starts daemon)
 
 ## Key Paths
 
-- `server/src/index.ts` — entry point, CLI flags, transport modes
+- `server/src/index.ts` — entry point, CLI flags, daemon/shim routing
+- `server/src/ports.ts` — deterministic port assignment (FNV-1a hash of project path)
+- `server/src/daemon-discovery.ts` — .godot/mcp-daemon.json lifecycle
+- `server/src/shim.ts` — stdio-to-HTTP proxy for stdio MCP clients
 - `server/src/server.ts` — tool/resource registration, screenshot post-processing
 - `server/src/bridge/` — WebSocket bridge + protocol types
 - `server/src/tools/` — tool definitions (file, scene, script, project, asset, runtime, visualizer)
@@ -29,21 +32,24 @@ MCP server + Godot 4.x plugin: 61 tools, 9 resources, WebSocket bridge. See [REA
 ## Architecture
 
 ```
-AI Client ──(MCP)──> server.ts ──(WebSocket :6505)──> Godot plugin ──> command processors
-                         │                                                     │
-                    Resources (:6506 HTTP)                          DebuggerPlugin ──> running game
+AI Client (stdio) ──> shim ──┐
+                              ├──(HTTP)──> daemon ──(WebSocket)──> Godot plugin ──> commands
+AI Client (HTTP)  ────────────┘                                          │
+                                                              DebuggerPlugin ──> running game
 ```
 
-- **stdio**: one server per AI client session
-- **HTTP daemon** (`--http`): persistent, multiple clients share one Godot connection
+- **HTTP daemon**: persistent process, multiple AI clients share one Godot connection
+- **Stdio shim**: thin proxy for stdio-only clients (Claude Desktop), auto-starts daemon
+- **Dynamic ports**: each project gets a unique port pair via FNV-1a hash of path (range 6505–8504)
+- **Daemon discovery**: `.godot/mcp-daemon.json` written on startup, read by shims and plugins
 - **Runtime tools** (`game_*`, visualizer): auto-inject `__MCPRuntimeBridge__` autoload before play
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GODOT_MCP_PORT` | 6505 | WebSocket port |
-| `GODOT_MCP_HTTP_PORT` | 6506 | HTTP daemon port |
+| `GODOT_MCP_PORT` | auto | WebSocket port (overrides hash-based assignment) |
+| `GODOT_MCP_HTTP_PORT` | auto | HTTP port (overrides hash-based assignment) |
 | `GODOT_MCP_TIMEOUT_MS` | 30000 | Tool call timeout |
 | `GODOT_MCP_IDLE_TIMEOUT_MS` | 30000 | Daemon idle shutdown |
 

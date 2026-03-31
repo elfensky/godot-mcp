@@ -1,6 +1,6 @@
 {
   "name": "@drunik/godot-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server for Godot game engine integration",
   "repository": {
     "type": "git",
@@ -19,7 +19,7 @@
     "start": "node dist/index.js",
     "dev": "tsc && node dist/index.js",
     "watch": "tsc --watch",
-    "daemon": "tsx src/index.ts --http",
+    "daemon": "tsx src/index.ts --daemon",
     "test": "node --test tests/*.test.mjs"
   },
   "keywords": [

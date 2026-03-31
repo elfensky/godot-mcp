@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-03-31
+
+### Changed
+- **BREAKING**: HTTP daemon is now the primary transport. Stdio mode replaced by a thin shim that proxies to the daemon. Users with stdio configs must update to `"type": "streamable-http"` or use the auto-proxying shim.
+- Dynamic port assignment: each project gets a unique port pair via FNV-1a hash of its path (range 6505–8504), enabling multiple simultaneous projects.
+- Daemon discovery via `.godot/mcp-daemon.json` — shims and plugins auto-discover running daemons.
+- `--http` flag accepted but deprecated (HTTP is now the default). Use `--daemon` to explicitly force daemon mode.
+- Added `--port <n>` CLI flag to override the HTTP port.
+- Godot plugin passes `--project <path>` to daemon, reads daemon file for WS port.
+- Tool count: 51 → 61 tools, 8 → 11 categories.
+
+### Added
+- **Lifecycle tools** (3): `start_godot`, `stop_godot`, `godot_process_status` — managed Godot process lifecycle with `--project` flag
+- **Input tools** (2): `send_input_action`, `send_key_event` — simulate input in the running game
+- **Eval tools** (2): `eval_expression` (runtime), `eval_editor_expression` (editor) — evaluate GDScript expressions
+- **Assert tools** (3): `assert_property`, `assert_node_exists`, `wait_for_condition` — automated testing meta-tools
+- `GodotProcess` class for managed Godot instances with `--project` flag
+- `waitForConnection()` on `GodotBridge` for reliable startup sequencing
+- Headless screenshot guard in runtime bridge
+- Stdio-to-HTTP shim (`server/src/shim.ts`) for stdio-only MCP clients
+- Deterministic port computation (`server/src/ports.ts`) from project path
+- Daemon file lifecycle (`server/src/daemon-discovery.ts`)
+
+### Removed
+- Direct stdio transport (StdioServerTransport) — replaced by shim proxy
+
 ## [0.1.0] - 2026-03-31
 
 ### Added
@@ -36,5 +62,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Shutdown race condition where `transport.close()` callback deleted session before `server.close()`
 - Scene resource template using wrong parameter name (`path` -> `scene_path`)
 
-[Unreleased]: https://github.com/drunikbe/godot-mcp/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/drunikbe/godot-mcp/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/drunikbe/godot-mcp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/drunikbe/godot-mcp/releases/tag/v0.1.0

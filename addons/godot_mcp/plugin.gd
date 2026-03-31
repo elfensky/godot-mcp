@@ -17,6 +17,7 @@ var _debugger_plugin = null
 var _autoload_injected: bool = false
 var _runtime_debugging_enabled: bool = false
 var _screenshot_path: String = ".godot/mcp-screenshots/"
+var _mcp_client_port: int = 0  # 0 = use default
 
 
 func _enter_tree() -> void:
@@ -34,7 +35,7 @@ func _enter_tree() -> void:
 		add_debugger_plugin(_debugger_plugin)
 
 	# Ensure the MCP daemon is running before we try to connect
-	_ensure_daemon_running()
+	await _ensure_daemon_running()
 
 	# Create MCP client (WebSocket connection to server)
 	_mcp_client = MCPClientScript.new()
@@ -58,7 +59,9 @@ func _enter_tree() -> void:
 	# Add status indicator to editor toolbar
 	_setup_status_indicator()
 
-	# Start connection
+	# Set dynamic port if discovered, then connect
+	if _mcp_client_port > 0:
+		_mcp_client.set_port(_mcp_client_port)
 	_mcp_client.connect_to_server()
 
 	print("[Godot MCP] Plugin loaded — connecting to MCP server...")
@@ -89,6 +92,9 @@ func _check_runtime_debug_support() -> bool:
 ## into the godot-mcp repo. ProjectSettings.globalize_path("res://...") returns
 ## the project-side path without following symlinks, so we resolve via realpath
 ## to find the actual repo location and derive the server path from there.
+##
+## Port discovery: the daemon writes .godot/mcp-daemon.json with its ports.
+## We poll for this file after starting the daemon to get the WS port.
 func _ensure_daemon_running() -> void:
 	var addon_path := ProjectSettings.globalize_path("res://addons/godot_mcp")
 	var real_addon_dir := _resolve_symlink(addon_path)
@@ -99,15 +105,21 @@ func _ensure_daemon_running() -> void:
 		print("[Godot MCP] No local daemon found — start the MCP server manually or via npx")
 		return
 
-	if _is_port_in_use(6505):
-		print("[Godot MCP] Daemon already running (port 6505 in use)")
+	var godot_project_path := ProjectSettings.globalize_path("res://")
+
+	# Check if daemon is already running via discovery file
+	var daemon_info := _read_daemon_file()
+	if daemon_info.size() > 0:
+		var ws_port: int = daemon_info.get("wsPort", MCPClientScript.DEFAULT_PORT)
+		print("[Godot MCP] Daemon already running (WS port %d)" % ws_port)
+		_mcp_client_port = ws_port
 		return
 
 	print("[Godot MCP] Starting MCP daemon from %s" % server_dir)
 	var pid: int
 	if OS.get_name() == "Windows":
 		pid = OS.create_process("cmd.exe", [
-			"/c", "cd /d \"%s\" && node dist/index.js --http --no-force" % server_dir
+			"/c", "cd /d \"%s\" && node dist/index.js --daemon --project \"%s\" --no-force" % [server_dir, godot_project_path]
 		])
 	else:
 		var shell := OS.get_environment("SHELL")
@@ -115,12 +127,37 @@ func _ensure_daemon_running() -> void:
 			shell = "/bin/sh"
 		pid = OS.create_process(shell, [
 			"-l", "-c",
-			"cd '%s' && node dist/index.js --http --no-force" % server_dir
+			"cd '%s' && node dist/index.js --daemon --project '%s' --no-force" % [server_dir, godot_project_path]
 		])
 	if pid > 0:
-		print("[Godot MCP] Daemon started (PID %d)" % pid)
+		print("[Godot MCP] Daemon started (PID %d) — waiting for port discovery..." % pid)
+		# Poll for daemon file to discover the actual WS port
+		for i in range(30):  # up to 15 seconds
+			await get_tree().create_timer(0.5).timeout
+			daemon_info = _read_daemon_file()
+			if daemon_info.size() > 0:
+				_mcp_client_port = daemon_info.get("wsPort", MCPClientScript.DEFAULT_PORT)
+				print("[Godot MCP] Daemon ready (WS port %d)" % _mcp_client_port)
+				return
+		push_warning("[Godot MCP] Daemon started but discovery file not found — using default port")
 	else:
 		push_warning("[Godot MCP] Failed to start daemon")
+
+
+## Read .godot/mcp-daemon.json and return parsed dictionary, or empty if missing/invalid.
+func _read_daemon_file() -> Dictionary:
+	var daemon_file := ProjectSettings.globalize_path("res://.godot/mcp-daemon.json")
+	if not FileAccess.file_exists(daemon_file):
+		return {}
+	var f := FileAccess.open(daemon_file, FileAccess.READ)
+	if f == null:
+		return {}
+	var text := f.get_as_text()
+	f.close()
+	var data = JSON.parse_string(text)
+	if data is Dictionary:
+		return data
+	return {}
 
 
 func _resolve_symlink(path: String) -> String:
@@ -142,17 +179,6 @@ func _resolve_symlink(path: String) -> String:
 				return resolved
 	return path
 
-
-func _is_port_in_use(port: int) -> bool:
-	var output: Array = []
-	if OS.get_name() == "Windows":
-		var exit_code := OS.execute("cmd.exe", [
-			"/c", "netstat -ano | findstr :%d | findstr LISTENING" % port
-		], output, true, false)
-		return exit_code == 0 and output.size() > 0 and output[0].strip_edges() != ""
-	else:
-		var exit_code := OS.execute("lsof", ["-ti", ":%d" % port], output, true, false)
-		return exit_code == 0 and output.size() > 0 and output[0].strip_edges() != ""
 
 
 func _cleanup_stale_autoload() -> void:
