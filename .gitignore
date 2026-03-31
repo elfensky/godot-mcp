@@ -17,3 +17,6 @@ Thumbs.db
 # Env
 .env
 .env.local
+
+# ai tools
+.desloppify
