@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-03-31
+
+### Fixed
+- Daemon↔plugin spawn recursion loop: daemon now passes `GODOT_MCP_SPAWNED_BY_DAEMON=1` env var to spawned Godot so the plugin skips auto-daemon startup
+- Self-recovery instructions in CLAUDE.md for bootstrapping without MCP tools
+
+### Changed
+- Status indicator shows 3 states via icon+color: ☑️ (red), 🔄 (yellow), ✅ (green)
+- Added `reconnecting` signal to MCPClient for status transitions
+
+## [0.2.2] - 2026-03-31
+
+### Fixed
+- EditorDebuggerPlugin session not activating (issue #1)
+
+## [0.2.1] - 2026-03-31
+
+### Fixed
+- 4 bugs found during E2E testing
+- Added comprehensive E2E and unit test coverage
+
 ## [0.2.0] - 2026-03-31
 
 ### Changed
@@ -62,6 +83,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Shutdown race condition where `transport.close()` callback deleted session before `server.close()`
 - Scene resource template using wrong parameter name (`path` -> `scene_path`)
 
-[Unreleased]: https://github.com/drunikbe/godot-mcp/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/drunikbe/godot-mcp/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/drunikbe/godot-mcp/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/drunikbe/godot-mcp/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/drunikbe/godot-mcp/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/drunikbe/godot-mcp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/drunikbe/godot-mcp/releases/tag/v0.1.0
