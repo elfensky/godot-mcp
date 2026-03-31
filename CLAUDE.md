@@ -55,6 +55,25 @@ graph LR
 | `GODOT_MCP_TIMEOUT_MS` | 30000 | Tool call timeout |
 | `GODOT_MCP_IDLE_TIMEOUT_MS` | 30000 | Daemon idle shutdown |
 
+## Self-Recovery (when MCP tools are unavailable)
+
+If the MCP server is disconnected and you have no Godot MCP tools available, bootstrap it manually:
+
+```bash
+# 1. Build (if needed)
+cd server && npm run build
+
+# 2. Start daemon + headless Godot in one command (from repo root)
+node server/dist/index.js --daemon --project "$(pwd)" &
+
+# 3. Wait a few seconds for Godot to connect, then verify
+curl -s http://127.0.0.1:$(node -e "const{projectPorts}=require('./server/dist/ports.js');console.log(projectPorts(process.cwd()).http)")/mcp -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","method":"initialize","id":1,"params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0.1"}}}'
+```
+
+Once the daemon is running, the MCP tools should reconnect automatically. If only Godot disconnected (daemon still running), use the `start_godot` MCP tool instead.
+
+**Fallback testing without MCP**: `cd server && npm test` (unit) and `godot --headless --script res://tests/test_plugin.gd` (plugin) work without the MCP server.
+
 ## Adding Tools
 
 1. Define schema in `server/src/tools/<domain>-tools.ts`
