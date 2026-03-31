@@ -267,7 +267,7 @@ func _exit_tree() -> void:
 
 func _setup_status_indicator() -> void:
 	_status_label = Label.new()
-	_status_label.add_theme_font_size_override("font_size", 12)
+	_status_label.add_theme_font_size_override("font_size", 16)
 	add_control_to_container(EditorPlugin.CONTAINER_TOOLBAR, _status_label)
 	_update_status("connecting")
 
