@@ -6,8 +6,8 @@ MCP server + Godot 4.x plugin: 61 tools, 9 resources, WebSocket bridge. See [REA
 
 ## Quick Reference
 
-- **Owner**: `drunikbe/godot-mcp` (Drunik BV)
-- **npm**: `@drunik/godot-mcp`
+- **Owner**: `elfensky/godot-mcp` (Andrei Lavrenov)
+- **npm**: `@elfensky/godot-mcp`
 - **Build**: `cd server && npm install && npm run build`
 - **Test server**: `cd server && npm test` (156 unit tests)
 - **Test E2E**: `cd server && npm run test:e2e` (34 tests, requires running daemon + headless Godot)

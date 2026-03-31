@@ -119,7 +119,7 @@ describe('MCP Server', () => {
       const { initResponse } = await initSession();
       const result = initResponse.result;
       assert.equal(result.protocolVersion, '2025-03-26');
-      assert.equal(result.serverInfo.name, '@drunik/godot-mcp');
+      assert.equal(result.serverInfo.name, '@elfensky/godot-mcp');
       assert.ok(result.capabilities.tools, 'should have tools capability');
       assert.ok(result.capabilities.resources, 'should have resources capability');
     });

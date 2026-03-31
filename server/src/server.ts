@@ -26,7 +26,7 @@ import { lifecycleToolNames } from './tools/lifecycle-tools.js';
 import { assertToolNames, handleAssertTool } from './tools/assert-tools.js';
 import { staticResources, resourceTemplates, readResource } from './resources/index.js';
 
-const SERVER_NAME = '@drunik/godot-mcp';
+const SERVER_NAME = '@elfensky/godot-mcp';
 
 export function createMcpServer(
   godotBridge: GodotBridge,

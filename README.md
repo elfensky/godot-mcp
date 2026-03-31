@@ -107,7 +107,7 @@ The visualizer draws on a `CanvasLayer` at z-index 100, above all game content:
 
 ```sh
 # Clone the repo
-git clone https://github.com/drunikbe/godot-mcp.git
+git clone https://github.com/elfensky/godot-mcp.git
 cd godot-mcp/server && npm install && npm run build
 
 # Symlink the addon into your Godot project
@@ -117,7 +117,7 @@ ln -s /path/to/godot-mcp/addons/godot_mcp /path/to/your-project/addons/godot_mcp
 #### Option B: npx (coming soon)
 
 ```sh
-npx @drunik/godot-mcp --daemon
+npx @elfensky/godot-mcp --daemon
 ```
 
 ### Enable the Plugin
@@ -136,7 +136,7 @@ Add a `.mcp.json` to your **Godot project root** (next to `project.godot`):
   "mcpServers": {
     "godot-mcp": {
       "command": "npx",
-      "args": ["@drunik/godot-mcp"]
+      "args": ["@elfensky/godot-mcp"]
     }
   }
 }
