@@ -8,21 +8,24 @@ Works with any MCP-compatible AI client: Claude Code, Claude Desktop, Cursor, Wi
 
 ```mermaid
 graph LR
-    A1["AI Client (stdio)"] --> Shim["Shim"]
-    Shim -->|HTTP| Daemon["Node.js Daemon"]
-    A2["AI Client (HTTP)"] -->|HTTP| Daemon
-    Daemon -->|WebSocket| Plugin["Godot Plugin"]
+    A1["AI Client (stdio)"] --> Server["In-Process MCP Server"]
+    A2["AI Client (HTTP)"] -->|HTTP| Daemon["HTTP Daemon"]
+    Server -->|WebSocket| Plugin["Godot Plugin"]
+    Daemon -->|WebSocket| Plugin
     Plugin --> Exec["Command execution\nScene manipulation\nRuntime debugging"]
 ```
 
 The system has two layers:
 
-1. **Node.js MCP server** — HTTP daemon that speaks the MCP protocol to AI clients and translates tool calls into WebSocket messages
+1. **Node.js MCP server** — speaks the MCP protocol to AI clients and translates tool calls into WebSocket messages
 2. **GDScript editor plugin** — runs inside Godot, receives commands via WebSocket, executes them using the editor and engine APIs
 
-The server runs as a persistent HTTP daemon. Multiple AI clients can connect simultaneously, sharing one Godot connection. Stdio-only MCP clients (like Claude Desktop) are handled by a thin shim that auto-starts the daemon and proxies messages.
+Two transport modes:
 
-Each Godot project gets its own daemon on a unique port pair (derived from the project path), so multiple projects can run in parallel without conflicts.
+- **Stdio (default)** — when spawned by an MCP client (Claude Code, Claude Desktop, Cursor), the server runs in-process and auto-starts a headless Godot in the background. No daemon, no proxy — the process IS the server. Tools are available immediately; Godot connects asynchronously.
+- **HTTP daemon** (`--daemon`) — persistent HTTP server for multi-client setups where multiple AI clients share one Godot connection.
+
+Each Godot project gets a unique port pair (derived from the project path via FNV-1a hash), so multiple projects can run in parallel without conflicts.
 
 ## Features
 
@@ -142,11 +145,11 @@ Add a `.mcp.json` to your **Godot project root** (next to `project.godot`):
 }
 ```
 
-This works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP client that supports stdio. The server auto-discovers the Godot project from the working directory and auto-starts a background daemon.
+This works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP client that supports stdio. The server runs in-process, auto-discovers the Godot project from the working directory, and auto-starts a headless Godot in the background.
 
-**Alternative: streamable-http (for clients that support it)**
+**Alternative: streamable-http (for multi-client setups)**
 
-If you prefer a persistent connection or have multiple AI clients sharing one Godot session:
+If you need multiple AI clients sharing one Godot session, use the HTTP daemon mode:
 
 ```json
 {
@@ -159,7 +162,7 @@ If you prefer a persistent connection or have multiple AI clients sharing one Go
 }
 ```
 
-> **Note:** The port (6506) is the default. With `--project`, each project gets a unique port via hash. Check `.godot/mcp-daemon.json` for the actual port.
+> **Note:** The port (6506) is the default. With `--project`, each project gets a unique port via hash. In daemon mode, check `.godot/mcp-daemon.json` for the actual port.
 
 ## Configuration
 
@@ -181,7 +184,7 @@ node dist/index.js [flags]
 
 --project <path>  Godot project path (enables dynamic ports + process management)
 --port <n>        Override the HTTP port
---daemon          Force daemon mode (needed when stdin is piped, e.g., tests)
+--daemon          Force HTTP daemon mode (stdio is the default when stdin is piped)
 --no-force        Don't kill existing processes on startup
 --http            Accepted for backwards compat (no-op, HTTP is always on)
 ```
@@ -190,7 +193,7 @@ node dist/index.js [flags]
 
 Without `--project`, the server uses default ports 6505/6506. With `--project`, each project gets a unique port pair derived from its absolute path via FNV-1a hash (range 6505–8504). This means multiple Godot projects can run simultaneously without port conflicts.
 
-The daemon writes `.godot/mcp-daemon.json` with its actual ports so that shims and plugins can discover it.
+In HTTP daemon mode, the daemon writes `.godot/mcp-daemon.json` with its actual ports so that plugins can discover it. In stdio mode, ports are used only for the internal WebSocket connection to Godot.
 
 ## Architecture
 
@@ -203,16 +206,21 @@ graph TD
         H["AI Client (HTTP)"]
     end
 
-    S --> Shim["Shim (stdio→HTTP)"]
-
-    subgraph Daemon["Node.js Daemon"]
-        MCP["MCP Server<br/>(server.ts)"]
-        Bridge["GodotBridge<br/>(WebSocket)"]
-        MCP -->|"Tool validation<br/>Resource serving<br/>Screenshot encoding"| Bridge
+    subgraph StdioServer["Stdio Mode (in-process)"]
+        MCP1["MCP Server<br/>(server.ts)"]
+        Bridge1["GodotBridge<br/>(WebSocket)"]
+        MCP1 -->|"Tool validation<br/>Resource serving<br/>Screenshot encoding"| Bridge1
     end
 
-    Shim -->|HTTP :auto| MCP
-    H -->|HTTP :auto| MCP
+    S -->|stdio| MCP1
+
+    subgraph Daemon["HTTP Daemon Mode"]
+        MCP2["MCP Server<br/>(server.ts)"]
+        Bridge2["GodotBridge<br/>(WebSocket)"]
+        MCP2 -->|"Tool validation<br/>Resource serving<br/>Screenshot encoding"| Bridge2
+    end
+
+    H -->|HTTP :auto| MCP2
 
     subgraph Godot["Godot Editor Process"]
         Client["MCPClient<br/>(WebSocket)"]
@@ -224,7 +232,8 @@ graph TD
         Client --> Debugger --> Game
     end
 
-    Bridge -->|"WebSocket :auto"| Client
+    Bridge1 -->|"WebSocket :auto"| Client
+    Bridge2 -->|"WebSocket :auto"| Client
 ```
 
 ### Command Processing Pattern
@@ -246,7 +255,7 @@ Messages between server and plugin are JSON over WebSocket:
 | Plugin -> Server | `tool_result` | Return result with `{id, success, result/error}` |
 | Server -> Plugin | `ping` | Keepalive (every 10s) |
 | Plugin -> Server | `pong` | Keepalive response |
-| Plugin -> Server | `godot_ready` | Connection established with `{project_path}` |
+| Plugin -> Server | `godot_ready` | Connection established with `{project_path, protocol_version}` |
 
 ### Screenshot Pipeline
 
@@ -268,7 +277,7 @@ npm run build
 npm test
 ```
 
-67 tests covering initialization, tool listing, resource listing, WebSocket round-trip, session management, assert tools, and lifecycle tools.
+194 tests covering initialization, tool listing, resource listing, WebSocket round-trip, session management, assert tools, lifecycle tools, offline handlers, port assignment, daemon discovery, protocol version negotiation, and tool manifest validation.
 
 ### Plugin Tests (GDScript)
 
@@ -278,7 +287,7 @@ Run from any Godot project with the addon:
 godot --headless --script res://tests/test_plugin.gd
 ```
 
-43 tests validating class loading, processor instantiation, tool declarations, command routing, and WebSocket client contracts.
+44 tests validating class loading, processor instantiation, tool declarations, command routing, WebSocket client contracts, and protocol version presence.
 
 ## Adding New Tools
 
@@ -286,7 +295,8 @@ godot --headless --script res://tests/test_plugin.gd
 2. Register in `server/src/tools/index.ts`
 3. Implement the handler in `addons/godot_mcp/commands/<domain>_commands.gd` extending `MCPBaseCommandProcessor`
 4. Register the processor in `commands/command_handler.gd`
-5. Rebuild: `cd server && npm run build`
+5. Update the expected tool list in `server/tests/tool-manifest.test.mjs`
+6. Rebuild: `cd server && npm run build`
 
 ### Tool Conventions
 

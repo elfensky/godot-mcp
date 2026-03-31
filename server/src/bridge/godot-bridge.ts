@@ -21,6 +21,8 @@ const DEFAULT_PORT = 6505;
 const DEFAULT_TIMEOUT = 30000;
 const PING_INTERVAL = 10000;
 
+export const PROTOCOL_VERSION = 1;
+
 interface PendingRequest {
   resolve: (result: unknown) => void;
   reject: (error: Error) => void;
@@ -32,6 +34,7 @@ interface PendingRequest {
 interface GodotInfo {
   projectPath?: string;
   connectedAt: Date;
+  protocolVersion?: number;
 }
 
 type ConnectionCallback = (connected: boolean, info?: GodotInfo) => void;
@@ -168,7 +171,12 @@ export class GodotBridge {
       case 'godot_ready':
         if (this.godotInfo) {
           this.godotInfo.projectPath = message.project_path;
-          this.log('info', `Godot project: ${message.project_path}`);
+          const remoteVersion = message.protocol_version ?? 0;
+          this.godotInfo.protocolVersion = remoteVersion;
+          if (remoteVersion !== PROTOCOL_VERSION) {
+            this.log('warn', `Protocol version mismatch: server=${PROTOCOL_VERSION}, plugin=${remoteVersion}`);
+          }
+          this.log('info', `Godot project: ${message.project_path} (protocol v${remoteVersion})`);
           // Notify again with project path populated — waitForConnection resolves here
           this.notifyConnectionChange(true, this.godotInfo);
         }

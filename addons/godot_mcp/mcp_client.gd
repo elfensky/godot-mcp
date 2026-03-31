@@ -103,6 +103,7 @@ func _handle_connect() -> void:
 	_send_message({
 		&"type": &"godot_ready",
 		&"project_path": _project_path,
+		&"protocol_version": 1,
 	})
 
 	connected.emit()

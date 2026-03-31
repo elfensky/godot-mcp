@@ -50,6 +50,7 @@ export interface PongMessage {
 export interface GodotReadyMessage {
   type: 'godot_ready';
   project_path: string;
+  protocol_version?: number;
 }
 
 export type WebSocketMessage =

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **BREAKING**: Stdio mode now runs the MCP server in-process (like chrome-devtools-mcp) instead of proxying to an HTTP daemon. This eliminates the shim→daemon race condition that caused "server unavailable" errors. The shim (`server/src/shim.ts`) is deprecated.
+- Daemon mode: HTTP server and daemon discovery file are now written before Godot auto-start (fixes 60s startup block)
+- Daemon mode: Godot auto-start is now non-blocking (fire-and-forget)
+- Daemon mode: 60-second startup grace period before idle shutdown kicks in
+
+### Added
+- **Protocol version negotiation**: `godot_ready` message now carries `protocol_version` field. Server warns on mismatch, accepts legacy clients (missing field treated as v0). Bump `PROTOCOL_VERSION` in `godot-bridge.ts` when message format changes.
+- **Root Makefile**: `make build`, `make test`, `make test-unit`, `make test-plugin`, `make test-e2e`, `make clean` for single-command monorepo orchestration
+- **Tool manifest test**: `tool-manifest.test.mjs` asserts the exact set of 61 tool names — catches drift between server and plugin when tools are added or removed
+
+### Fixed
+- Server appearing "always unavailable" when started by Claude Code — root cause was `app.listen()` blocked behind 60s Godot timeout while shim polled with 15s deadline
+
 ## [0.3.0] - 2026-03-31
 
 ### Added

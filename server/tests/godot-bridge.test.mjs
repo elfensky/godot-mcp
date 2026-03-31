@@ -9,7 +9,7 @@ import { describe, it, before, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { WebSocket } from 'ws';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { GodotBridge } from '../dist/bridge/godot-bridge.js';
+import { GodotBridge, PROTOCOL_VERSION } from '../dist/bridge/godot-bridge.js';
 
 const TEST_PORT = 16600;
 
@@ -223,6 +223,55 @@ describe('GodotBridge', () => {
         () => bridge.waitForConnection(500),
         { message: /did not connect/ }
       );
+    });
+  });
+
+  describe('protocol version', () => {
+    /** @type {WebSocket} */
+    let ws;
+
+    afterEach(async () => {
+      if (ws && ws.readyState <= WebSocket.OPEN) {
+        ws.close();
+        await sleep(200);
+      }
+    });
+
+    it('accepts matching protocol version', async () => {
+      ws = new WebSocket(`ws://127.0.0.1:${TEST_PORT}`);
+      await new Promise(resolve => ws.on('open', resolve));
+      ws.send(JSON.stringify({ type: 'godot_ready', project_path: '/tmp/pv1', protocol_version: PROTOCOL_VERSION }));
+      await sleep(200);
+
+      assert.equal(bridge.isConnected(), true);
+      const status = bridge.getStatus();
+      assert.equal(status.projectPath, '/tmp/pv1');
+    });
+
+    it('accepts mismatched protocol version with warning (still connects)', async () => {
+      ws = new WebSocket(`ws://127.0.0.1:${TEST_PORT}`);
+      await new Promise(resolve => ws.on('open', resolve));
+      ws.send(JSON.stringify({ type: 'godot_ready', project_path: '/tmp/pv2', protocol_version: 999 }));
+      await sleep(200);
+
+      assert.equal(bridge.isConnected(), true);
+      assert.equal(bridge.getStatus().projectPath, '/tmp/pv2');
+    });
+
+    it('treats missing protocol_version as version 0 (legacy)', async () => {
+      ws = new WebSocket(`ws://127.0.0.1:${TEST_PORT}`);
+      await new Promise(resolve => ws.on('open', resolve));
+      ws.send(JSON.stringify({ type: 'godot_ready', project_path: '/tmp/pv3' }));
+      await sleep(200);
+
+      assert.equal(bridge.isConnected(), true);
+      assert.equal(bridge.getStatus().projectPath, '/tmp/pv3');
+    });
+
+    it('PROTOCOL_VERSION is a positive integer', () => {
+      assert.equal(typeof PROTOCOL_VERSION, 'number');
+      assert.ok(PROTOCOL_VERSION >= 1);
+      assert.equal(PROTOCOL_VERSION, Math.floor(PROTOCOL_VERSION));
     });
   });
 

@@ -250,6 +250,14 @@ func _test_websocket_client() -> void:
 		else:
 			_fail("missing %s()" % method)
 
+	# Verify protocol_version is present in godot_ready message
+	# (source-level check — the field must exist in the _handle_connect method)
+	var src: String = client_script.source_code
+	if src.find("protocol_version") >= 0:
+		_pass("mcp_client.gd includes protocol_version in godot_ready")
+	else:
+		_fail("mcp_client.gd missing protocol_version in godot_ready")
+
 	client.free()
 	print("")
 
